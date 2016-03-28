@@ -1,0 +1,13 @@
+{application, erl_etcd,
+ [
+  {description, "etcd erlang binding"},
+  {vsn, git},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  inets
+                 ]},
+  {mod, { erl_etcd_app, []}},
+  {env, [{hosts, [{"192.168.99.100", 4001}]}]}
+ ]}.

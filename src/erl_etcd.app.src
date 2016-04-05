@@ -9,5 +9,5 @@
                   inets
                  ]},
   {mod, { erl_etcd_app, []}},
-  {env, [{hosts, [{"192.168.99.100", 4001}]}]}
+  {env, [{hosts, [{"localhost", 2379}]}]}
  ]}.

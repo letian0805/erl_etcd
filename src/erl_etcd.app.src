@@ -2,7 +2,7 @@
  [
   {description, "etcd erlang binding"},
   {vsn, git},
-  {registered, []},
+  {registered, [erl_etcd_sup, erl_etcd]},
   {applications, [
                   kernel,
                   stdlib,

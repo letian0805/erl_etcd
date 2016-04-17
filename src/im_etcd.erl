@@ -1,17 +1,38 @@
 -module(im_etcd).
--export([get/1, put/2]).
+-export([load_config/1, save_config/2]).
 
-get(Key) ->
-    URL = erl_etcd:build_get_url(Key),
-    handle_json_response(get, erl_etcd:http_request(get, URL)).
+load_config(K)when is_atom(K)->
+    load_config(etcd_json:encode_key(K));
+load_config(K)when is_binary(K)->
+    C = handle_json_response(get, erl_etcd:get(K)),
+    decode_config(C).
 
-put(Key, Value)->
-    K = real_key(Key),
-    Dir = binary:part(Key, 0, byte_size(Key)-byte_size(K)),
-    {K1, V1} = etcd_json:erl_to_json(K, Value),
-    Dir1 = iolist_to_binary([Dir, "/"]),
-    URL = erl_etcd:build_put_url(Dir1, K1),
-    handle_json_response(put, erl_etcd:http_request(put, URL, erl_etcd:build_assignment(V1, value))).
+save_config(K, V)when is_atom(K)->
+    save_config(etcd_json:encode_key(K), V);
+save_config(K, V)when is_binary(K)->
+    do_save_config(K, V).
+
+do_save_config(K, [{_, _}|_] = V)->
+    lists:foreach(fun({K1, V1})->
+                          K2 = etcd_json:encode_key(K1),
+                          K3 = <<K/binary, "/", K2/binary>>,
+                          do_save_config(K3, V1)
+                  end, V);
+do_save_config(K, V)->
+    V1 = etcd_json:encode_value(V),
+    C = handle_json_response(put, erl_etcd:put(K, V1)),
+    decode_config(C).
+
+decode_config([{_, _}|_] = C)->
+    lists:map(fun({K, V})->
+                      {etcd_json:decode_key(K), decode_config(V)}
+              end, C);
+decode_config({K, V})->
+    {etcd_json:decode_key(K), decode_config(V)};
+decode_config(undefined)->
+    undefined;
+decode_config(V)->
+    etcd_json:decode_value(V).
 
 
 handle_json_response(API, Result) ->
@@ -19,7 +40,6 @@ handle_json_response(API, Result) ->
     %% io:format("~p -> ~p~n", [API, Result]),
     %% io:format("----------------------~n"),
     handle_json_response1(API, Result).
-
 
 handle_json_response1(get, #{<<"action">> := <<"get">>,
                              <<"node">> := Node})->
@@ -36,20 +56,13 @@ handle_json_response1(put, #{<<"action">> := <<"set">>,
                             }) ->
     undefined.
 
-real_key(Key)->
-    Parts = binary:split(Key, <<"/">>, [trim, global]),
-    lists:last(Parts).
-
-process_nodes(Nodes)->
-    lists:map(fun process_node/1, Nodes).
-
 process_node(#{<<"createdIndex">> := _CreatedIndex,
                <<"key">> := Key,
                <<"modifiedIndex">> := _ModedifiedIndex,
                <<"value">> := Value
               })->
-    RealKey = real_key(Key),
-    etcd_json:json_to_erl(RealKey, Value);
+    {_, K} = get_key(Key),
+    {K, Value};
 
 process_node(#{<<"createdIndex">> := _CreatedIndex,
                <<"dir">> := true,
@@ -57,18 +70,41 @@ process_node(#{<<"createdIndex">> := _CreatedIndex,
                <<"modifiedIndex">> := _ModedifiedIndex,
                <<"nodes">> := Nodes
               })->
-    Value = process_nodes(Nodes),
-    RealKey = real_key(Key),
-    {etcd_json:parse_json_key(jsx:decode(RealKey)), Value};
+    Value = process_node_1(Nodes),
+    {_, K} = get_key(Key),
+    {K, Value};
 
 process_node(#{<<"createdIndex">> := _CreatedIndex,
                <<"dir">> := true,
                <<"key">> := Key,
                <<"modifiedIndex">> := _ModedifiedIndex
               })->
-    ?MODULE:get(Key);
+    <<"/", K/binary>> = Key,
+    handle_json_response1(get, erl_etcd:get(K));
 
 process_node(#{<<"dir">> := true,
                <<"nodes">> := Nodes
               })->
-    process_nodes(Nodes).
+    process_node_1(Nodes).
+
+process_node_1(Nodes)->
+    lists:map(fun process_node/1, Nodes).
+
+get_path([])->
+    <<"">>;
+get_path([_|_]=D)->
+    LD = lists:last(D),
+    lists:map(fun(D1)->
+                      case D1 of
+                          LD -> D1;
+                          _ -> <<D1/binary, "/">>
+                      end
+              end, D).
+
+get_key(Path)->
+    Parts = binary:split(Path, <<"/">>, [global]) -- [<<>>],
+    K = lists:last(Parts),
+    D = Parts -- [K],
+    ND = iolist_to_binary(get_path(D)),
+    {ND, K}.
+

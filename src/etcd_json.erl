@@ -1,72 +1,55 @@
 -module(etcd_json).
 
--export([erl_to_json/2, json_to_erl/2, parse_json_key/1]).
+-export([decode_key/1, encode_key/1, decode_value/1, encode_value/1]).
 
-erl_to_json(Key, Value)->
-    do_erl_to_json(Key, Value).
+decode_key(K)->
+    K1 = jsx:decode(K),
+    decode_key_1(K1).
 
-json_to_erl(Key, Value)->
-    do_json_to_erl(Key, Value).
+encode_key(K)->
+    K1 = encode_key_1(K),
+    jsx:encode(K1).
 
-do_json_to_erl(Key, Value)->
-    prepare_json_to_erl(jsx:decode(Key), jsx:decode(Value)).
+decode_value(V)->
+    V1 = jsx:decode(V),
+    decode_value_1(V1).
 
-parse_json_key(<<"\"", _/binary>> = Key)->
-    jsx:decode(Key);
-parse_json_key(Key)when is_binary(Key)->
-    binary_to_atom(Key, latin1).
+encode_value(V)->
+    V1 = encode_value_1(V),
+    jsx:encode(V1).
 
-prepare_json_to_erl(<<"$", Key/binary>>, Value)->
-    {parse_json_key(Key), binary_to_atom(Value, latin1)};
-prepare_json_to_erl(Key, Value)->
-    {parse_json_key(Key), prepare_json_to_erl_1(Value)}.
+decode_key_1(<<"$", K/binary>>)->
+    K;
+decode_key_1(K)when is_binary(K)->
+    binary_to_atom(K, latin1);
+decode_key_1(K)->
+    K.
 
-prepare_json_to_erl_1([H|_] = Value)when is_tuple(H)->
-    lists:map(fun({K, V})->
-                      prepare_json_to_erl(K, V)
-              end, Value);
-prepare_json_to_erl_1([H|_] = Value)when is_list(H)->
-    lists:map(fun prepare_json_to_erl_1/1, Value);
+encode_key_1(K)when is_binary(K)->
+    <<"$", K/binary>>;
+encode_key_1(K)->
+    K.
 
-prepare_json_to_erl_1(V)->
-    prepare_json_to_erl_2(V).
-
-prepare_json_to_erl_2([_|_]=Value)->
-    lists:map(fun(V)->
-                      prepare_json_to_erl_2(V)
-              end, Value);
-
-prepare_json_to_erl_2({<<"$", K/binary>>, V})->
-    {parse_json_key(K), binary_to_atom(V, latin1)};
-prepare_json_to_erl_2({K, [_|_]=V})->
-    {parse_json_key(K), prepare_json_to_erl_2(V)};
-prepare_json_to_erl_2({K, V})->
-    {parse_json_key(K), V};
-prepare_json_to_erl_2(V)->
+decode_value_1([{_,_}|_] = V)->
+    lists:map(fun({K1, V1})->
+                      {decode_key_1(K1), decode_value_1(V1)}
+              end, V);
+decode_value_1([_|_] = V)->
+    lists:map(fun(V1)->
+                      decode_value_1(V1)
+              end, V);
+decode_value_1(<<"$", V/binary>>)->
+    V;
+decode_value_1(V)when is_binary(V)->
+    binary_to_atom(V, latin1);
+decode_value_1(V)->
     V.
 
-do_erl_to_json(Key, Value)->
-    prepare_erl_to_json(Key, Value).
-
-prepare_erl_to_json(Key, Value)when is_atom(Value)->
-    NewKey = prepare_erl_to_json_1(Key),
-    {<<"$", NewKey/binary>>, atom_to_binary(Value, latin1)};
-prepare_erl_to_json(Key, [H|_] = Value)when is_tuple(H)->
-    {prepare_erl_to_json_1(Key), prepare_erl_to_json_1(Value)};
-prepare_erl_to_json(Key, [_|_] = Value)->
-    VL = lists:map(fun(V)->
-                           prepare_erl_to_json_1(V)
-                   end, Value),
-    {prepare_erl_to_json_1(Key), VL};
-prepare_erl_to_json(K, V)->
-    {K, V}.
-
-prepare_erl_to_json_1(V)when is_atom(V)->
-    atom_to_binary(V, latin1);
-prepare_erl_to_json_1([H|_]=V)when is_tuple(H)->
-    lists:map(fun({K1, V1})->
-                      prepare_erl_to_json(K1, V1)
-              end, V);
-
-prepare_erl_to_json_1(V)->
-    iolist_to_binary(V).
+encode_value_1(V)when is_list(V)->
+    lists:map(fun encode_value_1/1, V);
+encode_value_1({K, V})->
+    {encode_key_1(K), encode_value_1(V)};
+encode_value_1(V)when is_binary(V)->
+    <<"$", V/binary>>;
+encode_value_1(V)->
+    V.

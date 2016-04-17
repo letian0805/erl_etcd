@@ -1,6 +1,13 @@
 -module(erl_etcd).
--export([build_put_url/1, build_put_url/2, build_get_url/1, build_get_url/2, http_request/2, http_request/3, build_assignment/2]).
+-export([put/2, get/1]).
 
+put(K, V)->
+    URL = build_put_url(K),
+    http_request(put, URL, build_assignment(V, value)).
+
+get(K)->
+    URL = build_get_url(K),
+    http_request(get, URL).
 
 http_request(Method, URL) ->
     HttpOptions = [{autoredirect, true}],
@@ -49,12 +56,6 @@ build_get_url(Key) ->
 build_put_url(Key) ->
     build_url(["/v2/keys/", Key]).
 
-build_get_url(Dir, Key) ->
-    build_url(["/v2/keys/", Dir, Key]).
-
-build_put_url(Dir, Key) ->
-    build_url(["/v2/keys/", Dir, Key]).
-
 build_url(Path) ->
     {Host, Port} = case application:get_env(erl_etcd, hosts) of
                        {ok, [{H, P}]}->{H, P};
@@ -69,6 +70,7 @@ iolist_to_string(S)->
     binary_to_list(iolist_to_binary(S)).
 
 build_assignment(V, value) ->
+    %io:format("build_assignment  value: ~p~n", [V]),
     "value=" ++ http_uri:encode(iolist_to_string(V));
 build_assignment(K, dir) ->
     "dir=" ++ http_uri:encode(iolist_to_string(K)).

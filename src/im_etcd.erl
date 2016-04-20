@@ -1,16 +1,18 @@
 -module(im_etcd).
--export([load_config/1, save_config/2]).
+-export([load_config/1, save_config/2, machine_id/1]).
 
-load_config(K)when is_atom(K)->
-    load_config(etcd_json:encode_key(K));
-load_config(K)when is_binary(K)->
-    C = handle_json_response(get, erl_etcd:get(K)),
+machine_id(NodeName)when is_atom(NodeName)->
+    load_config([machineid, NodeName]).
+
+load_config(K)->
+    Key = etcd_json:encode_key(K),
+    io:format("~p~n", [Key]),
+    C = handle_json_response(get, erl_etcd:get(Key)),
     decode_config(C).
 
-save_config(K, V)when is_atom(K)->
-    save_config(etcd_json:encode_key(K), V);
-save_config(K, V)when is_binary(K)->
-    do_save_config(K, V).
+save_config(K, V)->
+    Key = etcd_json:encode_key(K),
+    do_save_config(Key, V).
 
 do_save_config(K, [{_, _}|_] = V)->
     lists:foreach(fun({K1, V1})->

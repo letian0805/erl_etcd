@@ -1,52 +1,65 @@
-## json to erlang data
-### 1. atom key with atom value
-   - json:   {'$foo':'bar'}
-   - erlang: [{foo, bar}]
+###etcd data format
+- key
+- value
+- dir
 
-### 2. string key with string value
-   - json: {'"foo"': 'bar'}
-   - erlang: [{<<"foo">>, <<"bar">>}]
+###ejabberd.yml file
+- in ejabberd.yml, the type of key is atom, string or integer. the type of value is atom, string(no $), string(with $), integer, bool, struct, list.
 
-### 3. string key with atom value
-   - json: {'$"foo"': 'bar'}
-   - erlang: [{<<"foo">>, bar}]
+###etcd main format
+to convert etcd data to erlang data, we use json as the main format of key and value of etcd
 
-### 4. atom key with string array
-   - json: {'foo': ['bar 1', 'bar 2']}
-   - erlang: [{foo, [<<"bar 1">>, <<"bar 2">>]}]
+###etcd key to erlang key
+- to erlang atom
 
-### 5. atom key with object array
-   - json: {'foo': [{'a':'b'}, {'$c':'d'}]}
-   - erlang: [{foo, [[{a, <<"b">>}], [{c, d}]]}]
+        etcd:
+            muc_room
+            
+        erlang:
+            muc_room
+            
+- to erlang binary (string is formatted to binary in erlang)
 
+        etcd:
+            $muc_room
 
-## api of im_etcd
-### 1. put
-   - put single value as string when the directory not exists
-     <pre><code>  im_etcd:put(<<"/'test'/'foo'">>, <<"'bar'">>).</code></pre>
-     
-     this will create the directory 'test' automatically and set the value 'bar' for key 'foo' to etcd
-     
-   - put single value as atom
-    <pre><code>  im_etcd:put(<<"'$foo'">>, <<"'bar'">>). </code></pre>
-    
-    this will add an atom key-value to etcd
-    
-   - put string list
-    <pre><code>  im_etcd:put(<<"'foo'">>, <<"['a', 'b']">>). </code></pre>
-    
-    this whill add string list for key 'foo' to etcd
-    
-   - put object
-    <pre><code>  im_etcd:put(<<"'foo'">>, <<"{'a':'b', '$c':'d', '\"e\"':'f'}">>). </code></pre>
-    
-    this will add an object for key 'foo' to etcd
-    
-   - put object list
-    <pre><code>  im_etcd:put(<<"'foo'">>, <<"[{'a':'b'}, {'c':'d'}]">>). </code></pre>
-    
-    this will add an object list for key 'foo' to etcd
-    
-### 2. get
-   - get whole key-value of directory or get value of key
-    <pre><code>  im_etcd:get(<<"/'foo'">>). </pre></code>
+        erlang:
+            <<"muc_room">>
+            
+- to erlang int
+
+        etcd:
+            10
+            
+        erlang:
+            10
+        
+###etcd value to erlang value
+    etcd use json as the format of value, use $ to mark binary of erlang
+
+###etcd dir to erlang data
+- to erlang plist
+
+        etcd(dir with key-value):
+            muc_room:
+                muc_presence: true
+                muc_presence_async: false
+
+        erlang:
+            {muc_room, [{muc_presence, true}, {muc_presence_async, false}]}
+            
+        erlang code:
+            get(K, dir)->
+                Res = proccess_node(K),
+                lists:map(fun({K, V}->
+                                {decode_key(K, V), decode_value(V)}
+                            end, Res);
+
+###DO NOT USE THESE SYMBOL IN KEY
+        /   \   ,   +   %   ;
+        and other symbol which is specific to URL
+
+###compare with using $ for atom
+- using $ for atom can cause a problem when encoding atom and binary with $.
+        example: foo is encoded to "$foo", but <<"$foo">> is encoded to "$foo" too.
+        so, we use $ for binary only, and forbidden using the $ for atom.

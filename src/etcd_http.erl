@@ -1,5 +1,5 @@
--module(erl_etcd).
--export([put/2, get/1]).
+-module(etcd_http).
+-export([put/2, get/1, get/2, listen/1, listen/2]).
 
 put(K, V)->
     URL = build_put_url(K),
@@ -9,11 +9,41 @@ get(K)->
     URL = build_get_url(K),
     http_request(get, URL).
 
+get(K, [])->
+    ?MODULE:get(K);
+get(K, Opts)->
+    OptsUrl = opts_to_url(Opts),
+    URL = build_get_url(K),
+    NewURL = iolist_to_binary([URL, "?", OptsUrl]),
+    http_request(get, binary_to_list(NewURL)).
+
+listen(K)->
+    ?MODULE:get(K, [{wait, true}, {recursive, true}]).
+listen(K, [])->
+    listen(K);
+listen(K, Opts)->
+    NewOpts = [{wait, true} | proplists:delete(wait, Opts)],
+    NewOpts1 = [{recursive, true} | proplists:delete(recursive, NewOpts)],
+    ?MODULE:get(K, NewOpts1).
+
+opt_to_url({recursive, true})->
+    <<"recursive=true">>;
+opt_to_url({sorted, true})->
+    <<"sorted=true">>;
+opt_to_url({wait, true})->
+    <<"wait=true">>.
+
+opts_to_url([FirstOpt | Opts])->
+    lists:foldl(fun(Opt, Url)->
+                        OptUrl = opt_to_url(Opt),
+                        <<Url/binary, "&", OptUrl/binary>>
+                end, opt_to_url(FirstOpt), Opts).
+
 http_request(Method, URL) ->
     HttpOptions = [{autoredirect, true}],
     Options = [],
     Headers = [],
-    handle_http_response(Method, "", httpc:request(Method, { URL, Headers}, HttpOptions,Options)).
+    handle_http_response(Method, "", httpc:request(Method, { URL, Headers}, HttpOptions, Options)).
 
 http_request(Method, URL, Body) ->
     HttpOptions = [{autoredirect, true}],
@@ -21,7 +51,7 @@ http_request(Method, URL, Body) ->
     Headers = [],
     BodyType = "application/x-www-form-urlencoded",
     handle_http_response(Method, Body,
-                         httpc:request(Method, { URL, Headers, BodyType, Body}, HttpOptions,Options)).
+                         httpc:request(Method, { URL, Headers, BodyType, Body}, HttpOptions, Options)).
 
 
 handle_http_response(Method, OrigBody,
@@ -57,7 +87,7 @@ build_put_url(Key) ->
     build_url(["/v2/keys/", Key]).
 
 build_url(Path) ->
-    {Host, Port} = case application:get_env(erl_etcd, hosts) of
+    {Host, Port} = case application:get_env(etcd, hosts) of
                        {ok, [{H, P}]}->{H, P};
                        _->{"localhost", 8080}
                    end,

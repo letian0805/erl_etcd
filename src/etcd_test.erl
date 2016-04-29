@@ -4,21 +4,31 @@
 
 test()->
     test_put(),
-    test_get().
+    test_get(),
+    test_listen(),
+    ok.
 
 test_put()->
-    im_etcd:put(<<"'test'">>, <<"'aaaa'">>),
-    {test, <<"aaaa">>} = im_etcd:put(<<"'test'">>, <<"'bbbb'">>),
-    K = <<"'test1'/'foo'">>,
-    V = <<"[{'a':'b', '$c':'d', 'e':[{'$f':'g'}]}]">>,
-    im_etcd:put(K, V),
-    {foo, [[{a, <<"b">>}, {c, d}, {e, [[{f, g}]]}]]} = im_etcd:put(K, <<"'bar'">>),
+    K = 'foo1',
+    V = <<"bar">>,
+    etcd_opt:save_config(K, V),
+    {foo1, V} = etcd_opt:save_config(K, <<"bar1">>),
     ok.
 
 test_get()->
-    D = <<"'test1'">>,
-    K = <<D/binary, "/", "'foo'">>,
-    V = <<"[{'a':'b', '$c':'d', 'e':[{'$\"f\"':'g'}]}]">>,
-    im_etcd:put(K, V),
-    {test1, [{foo, [[{a, <<"b">>}, {c, d}, {e, [[{<<"f">>, g}]]}]]}]} = im_etcd:get(D),
+    K = 'foo2',
+    V = <<"bar2">>,
+    etcd_opt:save_config(K, V),
+    V1 = etcd_opt:load_config(K),
+    {foo2, V} = V1,
+    ok.
+
+listener(Key, Config)->
+    io:format("~p ~p~n", [Key, Config]).
+
+test_listen()->
+    etcd_opt:save_config(foo3, <<"bar">>),
+    etcd_watcher:start(foo3, fun listener/2),
+    timer:sleep(1000),
+    etcd_opt:save_config(foo3, <<"bar3">>),
     ok.

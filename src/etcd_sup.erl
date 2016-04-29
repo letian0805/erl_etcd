@@ -1,4 +1,4 @@
--module(erl_etcd_sup).
+-module(etcd_sup).
 
 -behaviour(supervisor).
 

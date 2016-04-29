@@ -1,4 +1,4 @@
--module(erl_etcd_app).
+-module(etcd_app).
 
 -behaviour(application).
 
@@ -10,8 +10,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    io:format("---------~p ~p ~n", [_StartType, _StartArgs]),
-    erl_etcd_sup:start_link().
+    etcd_sup:start_link().
 
 stop(_State) ->
     ok.

@@ -1,4 +1,4 @@
--module(etcd_json).
+-module(etcd_data).
 
 -export([decode_key/1, encode_key/1, decode_value/1, encode_value/1]).
 
@@ -14,7 +14,7 @@ encode_key(K)when is_binary(K)->
 encode_key(K)when is_integer(K)->
     integer_to_binary(K).
 
-decode_key(<<"$", K>>)->
+decode_key(<<"$", K/binary>>)->
     K;
 decode_key(K)when is_binary(K)->
     try

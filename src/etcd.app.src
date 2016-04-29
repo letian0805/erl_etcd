@@ -1,13 +1,13 @@
-{application, erl_etcd,
+{application, etcd,
  [
   {description, "etcd erlang binding"},
   {vsn, git},
-  {registered, [erl_etcd_sup, erl_etcd]},
+  {registered, [etcd_sup]},
   {applications, [
                   kernel,
                   stdlib,
                   inets
                  ]},
-  {mod, { erl_etcd_app, []}},
+  {mod, {etcd_app, [etcd_http, etcd_watcher, etcd_opt, etcd_data, etcd_yml]}},
   {env, [{hosts, [{"localhost", 2379}]}]}
  ]}.

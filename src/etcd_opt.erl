@@ -1,5 +1,5 @@
 -module(etcd_opt).
--export([load_config/1, save_config/2, listen_config/2]).
+-export([load_config/1, save_config/2, watch_config/2]).
 
 load_config(K)->
     Key = etcd_data:encode_key(K),
@@ -10,11 +10,17 @@ save_config(K, V)->
     Key = etcd_data:encode_key(K),
     do_save_config(Key, V).
 
-listen_config(K, Listener)->
+watch_config(K, Receiver)->
+    %C = handle_etcd_response(get, etcd_http:watch(Key)),
+    %NewConfig = decode_config(C),
+    %Listener(NewConfig).
     Key = etcd_data:encode_key(K),
-    C = handle_etcd_response(get, etcd_http:listen(Key)),
-    NewConfig = decode_config(C),
-    Listener(NewConfig).
+    R = fun(C)->
+                C1 = handle_etcd_response(get, C),
+                {K, V} = decode_config(C1),
+                Receiver(K, V)
+        end,
+    etcd_http:watch(Key, R).
 
 do_save_config(K, [{_, _}|_] = V)->
     lists:foreach(fun({K1, V1})->

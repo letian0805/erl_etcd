@@ -11,28 +11,27 @@
 
 -export([start_link/3, start/2, stop/1]).
 
--record(state, {name, key, module, listener}).
+-record(state, {name, key, module, receiver}).
 
-start(Key, Listener)->
+start(Key, Receiver)->
     ProcName = get_proc_name(Key),
-    ChildSpec = {ProcName, {?MODULE, start_link, [ProcName, Key, Listener]},
+    ChildSpec = {ProcName, {?MODULE, start_link, [ProcName, Key, Receiver]},
                  permanent, 5000, worker, [?MODULE]},
     io:format("-------start~n"),
     supervisor:start_child(etcd_sup, ChildSpec).
 
-start_link(ProcName, Key, Listener)->
+start_link(ProcName, Key, Receiver)->
     io:format("-------start_link~n"),
-    gen_server:start_link({local, ProcName}, ?MODULE, [ProcName, Key, Listener], []).
+    gen_server:start_link({local, ProcName}, ?MODULE, [ProcName, Key, Receiver], []).
 
 stop(Key)->
     ProcName = get_proc_name(Key),
     gen_server:call(ProcName, stop).
 
-init([ProcName, Key, Listener])->
-    httpc:set_options([{pipeline_timeout, 0}]),
+init([ProcName, Key, Receiver])->
     io:format("-------init~n"),
-    gen_server:cast(ProcName, listen),
-    {ok, #state{name = ProcName, key = Key, listener = Listener}}.
+    gen_server:cast(ProcName, watch),
+    {ok, #state{name = ProcName, key = Key, receiver = Receiver}}.
 
 handle_call(stop, _From, State)->
     {stop, normal, ok,  State};
@@ -40,14 +39,9 @@ handle_call(stop, _From, State)->
 handle_call(_Data, _From, State)->
     {reply, ok, State}.
 
-handle_cast(listen, #state{name = Proc, key = Key, listener = Listener} = State)->
-    io:format("-------listen~n"),
-    C = etcd_opt:listen_config(Key, Listener),
-    spawn(fun()->
-                  Listener(Key, C),
-                  io:format("----------- ~p~n", [Key])
-          end),
-    gen_server:cast(Proc, listen),
+handle_cast(watch, #state{name = Proc, key = Key, receiver = Receiver} = State)->
+    io:format("-------watch~n"),
+    do_watch(Proc, Key, Receiver),
     {noreply, State};
 
 handle_cast(_Data, State)->
@@ -61,6 +55,13 @@ code_change(_OldVsn, State, _Extra)->
 
 terminate(_Reason, _State)->
     ok.
+
+do_watch(Proc, Key, Receiver)->
+    R = fun(K, V)->
+                Receiver(K, V),
+                gen_server:cast(Proc, watch)
+        end,
+    etcd_opt:watch_config(Key, R).
 
 get_proc_name(Key)->
     BK = atom_to_binary(Key, latin1),

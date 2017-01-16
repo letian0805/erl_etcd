@@ -1,5 +1,5 @@
 -module(etcd_http).
--export([put/2, get/1, get/2, listen/1, listen/2]).
+-export([put/2, get/1, get/2, watch/1, watch/2, watch/3]).
 
 put(K, V)->
     URL = build_put_url(K),
@@ -17,14 +17,24 @@ get(K, Opts)->
     NewURL = iolist_to_binary([URL, "?", OptsUrl]),
     http_request(get, binary_to_list(NewURL)).
 
-listen(K)->
-    ?MODULE:get(K, [{wait, true}, {recursive, true}]).
-listen(K, [])->
-    listen(K);
-listen(K, Opts)->
+watch(K)->
+    watch(K, []).
+watch(K, Opts)when is_list(Opts)->
+    URL = make_watch_url(K, Opts),
+    http_request(get, binary_to_list(URL));
+
+watch(K, Receiver)->
+    watch(K, Receiver, []).
+watch(K, Receiver, Opts)->
+    URL = make_watch_url(K, Opts),
+    http_request(get, binary_to_list(URL), Receiver).
+
+make_watch_url(K, Opts)->
     NewOpts = [{wait, true} | proplists:delete(wait, Opts)],
     NewOpts1 = [{recursive, true} | proplists:delete(recursive, NewOpts)],
-    ?MODULE:get(K, NewOpts1).
+    OptsUrl = opts_to_url(NewOpts1),
+    URL = build_get_url(K),
+    iolist_to_binary([URL, "?", OptsUrl]).
 
 opt_to_url({recursive, true})->
     <<"recursive=true">>;
@@ -45,6 +55,17 @@ http_request(Method, URL) ->
     Headers = [],
     handle_http_response(Method, "", httpc:request(Method, { URL, Headers}, HttpOptions, Options)).
 
+http_request(Method, URL, Receiver) when is_function(Receiver)->
+    HttpOptions = [{autoredirect, true}],
+    R = fun({RID, C})->
+                C1 = handle_http_response(Method, "", {ok ,C}),
+                httpc:cancel_request(RID),
+                Receiver(C1)
+        end,
+    Options = [{sync, false}, {receiver, R}],
+    Headers = [],
+    httpc:request(Method, { URL, Headers}, HttpOptions, Options);
+
 http_request(Method, URL, Body) ->
     HttpOptions = [{autoredirect, true}],
     Options = [],
@@ -53,6 +74,17 @@ http_request(Method, URL, Body) ->
     handle_http_response(Method, Body,
                          httpc:request(Method, { URL, Headers, BodyType, Body}, HttpOptions, Options)).
 
+http_request(Method, URL, Receiver, Body)when is_function(Receiver)->
+    HttpOptions = [{autoredirect, true}],
+    R = fun({RID, C})->
+                C1 = handle_http_response(Method, Body, {ok, C}),
+                httpc:cancel_request(RID),
+                Receiver(C1)
+        end,
+    Options = [{sync, false}, {receiver, R}],
+    Headers = [],
+    BodyType = "application/x-www-form-urlencoded",
+    httpc:request(Method, { URL, Headers, BodyType, Body}, HttpOptions, Options).
 
 handle_http_response(Method, OrigBody,
                      {ok, {{_HTTPVersion, StatusCode, _ReasonPhrase} = _StatusLine,
@@ -60,9 +92,12 @@ handle_http_response(Method, OrigBody,
                            Body}}) ->
     handle_status_code_and_body(Method, OrigBody, StatusCode, Headers, Body).
 
+handle_status_code_and_body(_Method, _OrigBody, Code, _Headers, Body) when is_list(Body)->
+    handle_status_code_and_body(_Method, _OrigBody, Code, _Headers, list_to_binary(Body));
+
 handle_status_code_and_body(_Method, _OrigBody, Code, _Headers, Body) when
       Code == 200; Code == 201 ->
-    try case jsx:decode(list_to_binary(Body), [return_maps]) of
+    try case jsx:decode(Body, [return_maps]) of
             X -> X
         end
     catch

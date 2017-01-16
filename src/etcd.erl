@@ -5,12 +5,14 @@
 -export([]).
 
 start()->
-    inets:start(),
-    httpc:set_options([{pipeline_timeout, 0}]),
+    ok = ssl:start(),
+    ok = inets:start(),
+    ok = httpc:set_options([{max_sessions, 200}, {pipeline_timeout, 0}], default),
     p1_yaml:start(),
     application:start(etcd),
     code:load_file(etcd_data),
     code:load_file(etcd_http),
+    code:load_file(etcd_watcher),
     code:load_file(etcd_opt).
 
 stop()->

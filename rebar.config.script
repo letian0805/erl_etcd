@@ -1,6 +1,7 @@
 [
  {deps, [
     {jsx, ".*", {git, "git://github.com/talentdeficit/jsx.git"}},
+    {cuesport, ".*", {git, "git://github.com/goj/cuesport.git"}},
     {p1_yaml, ".*", {git, "git://github.com/processone/p1_yaml"}}
  ]}
 ].
